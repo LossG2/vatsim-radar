@@ -274,18 +274,19 @@ const routeRegex = /(?<waypoint>([A-Z0-9]+))\/([A-Z0-9]+?)(?<level>([FS])([0-9]{
 const NATRegex = /^NAT(?<letter>[A-Z])$/;
 
 const dataCache: {
-    [K in 'vhf' | 'ndb' | 'waypoints' | 'airways']: NavigraphNavDataShort[K]
+    [K in 'vhf' | 'ndb' | 'waypoints' | 'airways' | 'holdings']: NavigraphNavDataShort[K]
 } = {
     vhf: {},
     ndb: {},
     waypoints: {},
     airways: {},
+    holdings: {},
 };
 
 let latestUpdate = 0;
 
-export async function getNavigraphParsedData<T extends 'vhf' | 'ndb' | 'waypoints' | 'airways'>(type: T, key: string): Promise<NavigraphNavDataShort[T] | null>;
-export async function getNavigraphParsedData(type: 'vhf' | 'ndb' | 'waypoints' | 'airways', key: string): Promise<any | null> {
+export async function getNavigraphParsedData<T extends 'vhf' | 'ndb' | 'waypoints' | 'airways' | 'holdings'>(type: T, key: string): Promise<NavigraphNavDataShort[T] | null>;
+export async function getNavigraphParsedData(type: 'vhf' | 'ndb' | 'waypoints' | 'airways' | 'holdings', key: string): Promise<any | null> {
     latestUpdate = Date.now();
 
     if (key in dataCache[type]) return dataCache[type][key];
@@ -403,6 +404,7 @@ export async function getFlightPlanWaypoints({
 
                     if (depRunway) {
                         const runwayTransition = procedure?.transitions.runway.find(x => x.name === depRunway);
+
                         if (runwayTransition) {
                             waypoints.push(...runwayTransition.waypoints.map(x => ({
                                 identifier: x.identifier,
@@ -537,8 +539,6 @@ export async function getFlightPlanWaypoints({
                         if (fetchedProcedure) {
                             const transition = fetchedProcedure?.transitions.find(x => arrApproach?.transitions.includes(x.name) || x.name === starProcedure.waypoints[starProcedure.waypoints.length - 1]?.identifier);
 
-                            console.log(fetchedProcedure.waypoints);
-
                             if (transition) {
                                 deleteDoubleWaypoint(transition?.waypoints[0]?.identifier ?? '');
 
@@ -639,6 +639,7 @@ export async function getFlightPlanWaypoints({
 
                         const startingAirway = neededAirways.find(x => x[1][2].some(x => x[0] === entries[i - 1]?.split('/')[0]));
                         const endAirway = neededAirways.find(x => x[1][2].some(x => !entries[i + 1] || x[0] === entries[i + 1]?.split('/')[0]));
+
                         let startAirwayEndingWaypoint = -1;
                         let endAirwayStartingWaypoint = -1;
                         const endIndex = endAirway?.[1][2].findIndex(x => !entries[i + 1] || x[0] === entries[i + 1]?.split('/')[0]);
@@ -647,6 +648,7 @@ export async function getFlightPlanWaypoints({
                         // Looking for airway start
                         for (let i = startingIndex ?? 0; i < (startingAirway?.[1][2].length ?? 0); i++) {
                             endAirwayStartingWaypoint = endAirway?.[1][2].findIndex(x => x[0] === startingAirway?.[1][2][i]?.[0]) ?? -1;
+
                             if (endAirwayStartingWaypoint !== -1) {
                                 startAirwayEndingWaypoint = i;
                                 break;
@@ -660,15 +662,16 @@ export async function getFlightPlanWaypoints({
                             neededAirway[1][2].push(...endAirway![1][2].slice(endAirwayStartingWaypoint, endIndex! + 1));
                         }
 
-                        if (endIndex === -1 || endAirwayStartingWaypoint === -1 || !startingAirway || !endAirway) neededAirway = undefined;
+                        if (endAirwayStartingWaypoint === -1 && startingAirway && endAirway) {
+                            neededAirway[1][2].push(...startingAirway![1][2]);
+                        }
+                        else if (endIndex === -1 || endAirwayStartingWaypoint === -1 || !startingAirway || !endAirway) neededAirway = undefined;
                     }
                 }
 
                 if (neededAirway && entries[i + 1] && entries[i - 1]) {
                     let startIndex = neededAirway[1][2].findIndex(x => x[0] === entries[i - 1]?.split('/')[0]);
                     let endIndex = neededAirway[1][2].findIndex(x => x[0] === entries[i + 1]?.split('/')[0]);
-
-                    if (search === 'Q140') console.log(startIndex, endIndex);
 
                     neededAirway = JSON.parse(JSON.stringify(neededAirway)) as [string, ShortAirway];
 
@@ -693,7 +696,7 @@ export async function getFlightPlanWaypoints({
                     else {
                         waypoints.push({
                             identifier: neededAirway[1][0] || split[1] || entry,
-                            kind: 'airway',
+                            kind: 'airways',
                             airway: {
                                 key: neededAirway[0],
                                 value: neededAirway[1],
@@ -894,24 +897,24 @@ export async function updateCachedProcedures() {
             if (value.departure.icao) {
                 const selectedAirport = dataStore.navigraphAircraftProcedures.value[cid].departure;
 
-                const { data: procedures } = await useAsyncData(computed(() => `${ value.departure.icao }-aircraft-procedures-selected`), () => getNavigraphAirportProcedures(value.departure.icao!));
+                const procedures = await getNavigraphAirportProcedures(value.departure.icao!);
 
                 selectedAirport.runways = value.departure.runways;
                 selectedAirport.setBy = value.departure.setBy;
 
-                selectedAirport.sids = await getCachedSids(procedures.value!, value.departure.icao!, value.departure.sids);
+                selectedAirport.sids = await getCachedSids(procedures, value.departure.icao!, value.departure.sids);
             }
 
             if (value.arrival.icao) {
                 const selectedAirport = dataStore.navigraphAircraftProcedures.value[cid].arrival;
 
-                const { data: procedures } = await useAsyncData(computed(() => `${ value.departure.icao }-aircraft-procedures-selected`), () => getNavigraphAirportProcedures(value.arrival.icao!));
+                const procedures = await getNavigraphAirportProcedures(value.arrival.icao!);
 
                 selectedAirport.runways = value.arrival.runways;
                 selectedAirport.setBy = value.arrival.setBy;
 
-                selectedAirport.stars = await getCachedStars(procedures.value!, value.arrival.icao!, value.arrival.stars);
-                selectedAirport.approaches = await getCachedApproaches(procedures.value!, value.arrival.icao!, value.arrival.approaches);
+                selectedAirport.stars = await getCachedStars(procedures, value.arrival.icao!, value.arrival.stars);
+                selectedAirport.approaches = await getCachedApproaches(procedures, value.arrival.icao!, value.arrival.approaches);
             }
 
             if (

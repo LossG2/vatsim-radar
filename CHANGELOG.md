@@ -1,5 +1,100 @@
 # Changelog
 
+# [2.0.0-alpha.5]
+
+## Alpha Changes
+
+- VATGlasses sector labels now declutter with airports (with airports having priority)
+- Repositioned aircraft hover to always be placed nicely, but you won't be able to hover it anymore. I mean, you could just click the aircraft! 
+- Changed FIR/ARTCC label background to be more like on production
+- Moved Navigraph Layers to new render/select system
+
+### Mobile hovering improvements
+
+- Hover interactions have been disabled on touch devices
+- Click interactions have been reworked on touch devices to do what hover does on PC
+
+## Improvements and changes
+
+- Airway direction is now specified as next waypoint instead of "Forward" or "Backwards"
+- Removed blue highlight when you click the map
+- Navigraph AIRAC data now updates faster and in background
+- Initialization popup will not show if nothing to update
+
+## Bug Fixes
+
+- Fixed Retry button in Init Popup not closing popup if retry was successful
+- In case any of browser database methods will fail during initialization, database will be destroyed, and page will be reloaded for a complete update (assuming DB is corrupted, requiring to fix it manually before)
+
+## Redesign
+
+- Redesigned Navigraph on-click overlay
+- Redesigned pilot on-hover overlay
+- Redesigned tooltips
+
+## Performance improvements
+
+- Significantly reduced memory used by Navigraph Airways layer, added a cache for faster rendering and changed design a bit, so it's now worth giving this layer a go
+- Significantly improved performance and memory usage when rendering holdings, especially when rendering enroute holdings (all holdings layer is not enabled). Previous code was terrible. Who wrote that? Jesus.
+- Improved performance of Navigraph Layers, such as NBD, VORDME, Waypoints, as well as route rendering
+- Improved performance and memory usage of route rendering
+- Greatly improved speed of route rendering
+- Turns update has been slowed down to 5 seconds per aircraft
+
+# [2.0.0-alpha.4.3]
+
+- Fixed graphical artifacts for aircraft tracks
+
+# [2.0.0-alpha.4.2]
+
+## Alpha Changes
+
+- Fixed aircraft on-hover popup position
+
+# [2.0.0-alpha.4.1]
+
+## Alpha Changes
+
+- Fixed Gates color not changing when they are no longer occupied
+- Performance improvements for gates occupation check
+- Fixed rare airports (KLAX as an example) having incorrect on-hover name
+- Fixed CTAF frequency showing as suspended and not tuned up
+- Fixed flight track not displayed when pilot overlay is opened
+- Fixed click action always opening same airport
+
+# [2.0.0-alpha.4]
+
+Known Issues: 
+- Distance tool is INOP in all worlds except original
+- Navigraph Data has not yet been reworked to use new select system and can conflict when clicking
+
+## Improvements and changes
+
+- Significantly improved aircraft hovering stability and predictability
+- Removed aircraft on-hover delay separate setting in favor of global hover setting
+- Friend name is now always displayed in pilot hover popup
+- Implemented dynamic on-hover aircraft position (based on heading only)
+- Completely reworked map interactions with clear priorities and multiselect support
+- Significantly improved distance tool update speed when attach to an aircraft
+
+## Performance Improvements
+
+- Reworked aircraft render for much better performance, including speed of render and reduced memory and cpu usage of both aircraft and tracks update
+- Significantly improved tracks render smoothness and delay
+- Improved performance in Airport Dashboard
+
+# [2.0.0-alpha.3]
+
+## Improvements and changes
+
+- Implement on-hover delay
+- Added an ID for VATGlasses sectors
+
+## Performance Improvements
+
+- Significantly reduced memory usage for airlines icao codes
+- VATGlasses will now detach and stop updating when disabled after being enabled
+
 # [2.0.0-alpha.2]
 
 ## Improvements and changes
@@ -26,6 +121,41 @@
 - Reworked airports render for better memory usage
 - Removed memory consumption on SimAware data
 - Reduced gates memory consumption on render
+
+# [1.2.4-6.1]
+
+- Fixed Map Layer stopping loading when weather is failing to load
+- Roadmap has been updated
+- New icons from DotWallop: AA5, AN26, B52, BE33, C46, GA7C, L159, LEG2, P06T, VL3
+- Added model matching: AN32→AN26, VL3T→VL3, PA30→PA39
+- Add CZYZ FIR Terminal Sectors to ATC Duplicating
+- Update regex for LECB area in ATC duplication
+- Add ZDV mapping for ATC Duplication
+- Fixed map settings impossible to save or import if counters were disabled at some point
+- Fixed map settings impossible to save or import if Navigraph Terminal Waypoints were enabled or disabled at some point
+- Fixed map settings impossible to save or import if Aircraft scale settings is set to anything with 2 number after dot (for example, 1.35)
+- Fixed some airways not showing as intended
+- Add ZAU Center and TRACONs to ATC duplication
+- Migrated to new FAA NMS API for NOTAMs
+- To improve CTAF frequency usage, CTAF frequency has been added to first tab of pilot ATC popup if no other ATC is available and pilot is not tuned up to CTAF frequency
+
+# [1.2.4-6]
+
+- Add AGS approach to ATC duplication
+- Add VLY_X_APP to ATC duplicating
+- Add MHCC_CTR mapping for ATC duplicating settings
+- Added Modelmatching for several BE36 Types
+- Duplicating TRACONs are now displayed in ARTCC/FIR colors
+- Original callsign is now shown for all duplicated facilities
+- Added a duplicated warning with orig callsign in ATC popup if facility is duplicated
+
+# [1.2.4-5.2]
+
+- Added automatic VATSIM Status Monitoring
+
+# [1.2.4-5.1]
+
+- Fixed tracks data resetting on each disconnect or "next" version update
 
 # [1.2.4-5]
 

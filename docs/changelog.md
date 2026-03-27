@@ -8,13 +8,48 @@ outline: [2, 3]
 [[toc]]
 :::
 
-# 1.2.4.5
+## 1.2.4.6.1
+
+- Fixed Map Layer stopping loading when weather is failing to load
+- Roadmap has been updated
+- New icons from DotWallop: AA5, AN26, B52, BE33, C46, GA7C, L159, LEG2, P06T, VL3
+- Added model matching: AN32→AN26, VL3T→VL3, PA30→PA39
+- Add CZYZ FIR Terminal Sectors to ATC Duplicating
+- Update regex for LECB area in ATC duplication
+- Add ZDV mapping for ATC Duplication
+- Fixed map settings impossible to save or import if counters were disabled at some point
+- Fixed map settings impossible to save or import if Navigraph Terminal Waypoints were enabled or disabled at some point
+- Fixed map settings impossible to save or import if Aircraft scale settings is set to anything with 2 number after dot (for example, 1.35)
+- Fixed some airways not showing as intended
+- Add ZAU Center and TRACONs to ATC duplication
+- Migrated to new FAA NMS API
+- To improve CTAF frequency usage, CTAF frequency has been added to first tab of pilot ATC popup if no other ATC is available and pilot is not tuned up to CTAF frequency
+
+## 1.2.4.6
+
+- Add AGS approach to ATC duplication
+- Add VLY_X_APP to ATC duplicating
+- Add MHCC_CTR mapping for ATC duplicating settings
+- Added Modelmatching for several BE36 Types
+- Duplicating TRACONs are now displayed in ARTCC/FIR colors
+- Original callsign is now shown for all duplicated facilities
+- Added a duplicated warning with orig callsign in ATC popup if facility is duplicated
+
+## 1.2.4.5.2
+
+- Added automatic VATSIM Status Monitoring
+
+## 1.2.4.5.1
+
+- Fixed tracks data resetting on each disconnect or "next" version update
+
+## 1.2.4.5
 
 - Added NZ sector duplicating
 - Restored RainViewer weather layer
 - Add ZKC Center and TRACONs to ATC duplicating
 
-# 1.2.4.4
+## 1.2.4.4
 
 - Fixed an aircraft constantly going back and forward when tracked
 - Fix zdc atc duplication
@@ -26,7 +61,7 @@ outline: [2, 3]
 - Sectors are now shown in booking override mode by Felix 1025793
 - Fixed VATGlasses data not working in certain conditions
 
-# 1.2.4.3
+## 1.2.4.3
 
 - Fixed map crash after airports procedures have been opened, but nothing was selected
 - Fixed "show pilot stats" toggle not being saved

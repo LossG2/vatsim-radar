@@ -59,7 +59,7 @@ defineProps({
     },
     contentPadding: {
         type: String,
-        default: '0 8px 8px',
+        default: '8px',
     },
     asideContent: {
         type: Boolean,
@@ -93,7 +93,7 @@ const model = defineModel({ type: Boolean as PropType<boolean | null>, default: 
         gap: 4px 16px;
         align-items: center;
 
-        padding: 8px 12px;
+        padding: 8px;
         border-bottom: 1px solid $strokeDefault;
 
         color: $lightGray200;

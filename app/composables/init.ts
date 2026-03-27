@@ -2,7 +2,6 @@ import { useMapStore } from '~/store/map';
 import type { VatDataVersions } from '~/types/data';
 import type { VRInitStatus, VRInitStatusResult } from '~/store';
 import { useStore } from '~/store';
-import type { IDBAirlinesData } from '~/composables/render/idb';
 import { clientDB } from '~/composables/render/idb';
 import type { VatSpyAPIData } from '~/types/data/vatspy';
 import type { NavigraphNavDataShort } from '~/utils/server/navigraph/navdata/types';
@@ -40,30 +39,42 @@ async function initCheck(key: keyof VRInitStatus, handler: (args: {
     }
 }
 
+let previousInProgress = false;
+
+async function checkStatus() {
+    if (previousInProgress) return;
+    try {
+        previousInProgress = true;
+        const { ready } = await $fetch<{ ready: boolean }>('/api/data/status', { timeout: 2000 });
+        if (ready) {
+            return true;
+        }
+    }
+    catch (e) {
+        console.error(e);
+    }
+    finally {
+        previousInProgress = false;
+    }
+}
+
 export function checkForUpdates() {
     return initCheck('updatesCheck', async ({ mapStore, dataStore }) => {
         // Data is not yet ready
         if (!mapStore.dataReady) {
-            await new Promise<void>(resolve => {
-                let previousInProgress = false;
-                const interval = setInterval(async () => {
-                    if (previousInProgress) return;
-                    try {
-                        previousInProgress = true;
-                        const { ready } = await $fetch<{ ready: boolean }>('/api/data/status');
-                        if (ready) {
+            const ready = await checkStatus();
+
+            if (!ready) {
+                await new Promise<void>(resolve => {
+                    const interval = setInterval(async () => {
+                        const status = await checkStatus();
+                        if (status) {
                             resolve();
                             clearInterval(interval);
                         }
-                    }
-                    catch (e) {
-                        console.error(e);
-                    }
-                    finally {
-                        previousInProgress = false;
-                    }
-                }, 1000);
-            });
+                    }, 1000);
+                });
+            }
         }
 
         if (!dataStore.versions.value) {
@@ -86,7 +97,10 @@ export function checkForVATSpy() {
         if (!vatspy || vatspy.version !== dataStore.versions.value!.vatspy) {
             vatspy = await $fetch<VatSpyAPIData>('/api/data/vatspy');
 
-            await clientDB.data.put(vatspy, 'vatspy');
+            await clientDB.data.put(vatspy, 'vatspy').catch(() => {
+                clientDB.delete();
+                location.reload();
+            });
             notRequired = false;
         }
 
@@ -134,7 +148,7 @@ export async function checkForTracks() {
 
 export function checkForSimAware() {
     return initCheck('simaware', async ({ dataStore }) => {
-        const simaware = await clientDB.keyVal.get('simawareVersion') as string | undefined;
+        const simaware = await clientDB.simaware.get('version') as string | undefined;
         let notRequired = true;
         if (!simaware || simaware !== dataStore.versions.value!.simaware) {
             const data = await $fetch<SimAwareAPIData>('/api/data/simaware');
@@ -150,8 +164,14 @@ export function checkForSimAware() {
                 }
             }
 
-            await clientDB.keyVal.bulkPut(Object.values(groups), Object.keys(groups).map(x => `simaware-${ x }`));
-            await clientDB.keyVal.put(data.version, 'simawareVersion');
+            try {
+                await clientDB.simaware.bulkPut(Object.values(groups), Object.keys(groups));
+                await clientDB.simaware.put(data.version, 'version');
+            }
+            catch {
+                clientDB.delete();
+                location.reload();
+            }
             notRequired = false;
         }
 
@@ -183,7 +203,10 @@ export function checkForVG() {
 
         if (!vatglasses || vatglasses.version !== dataStore.versions.value!.vatglasses) {
             vatglasses = await $fetch<VatglassesAPIData>('/api/data/vatglasses');
-            await clientDB.data.put(vatglasses, 'vatglasses');
+            await clientDB.data.put(vatglasses, 'vatglasses').catch(() => {
+                clientDB.delete();
+                location.reload();
+            });
         }
 
         dataStore.vatglasses.value = vatglasses.version;
@@ -196,9 +219,10 @@ export function checkForVG() {
 }
 
 async function upsertBagsByIdentifier<D extends any[], T extends Record<string, D>>(
-    prefix: 'airways' | 'waypoints' | 'vhf' | 'ndb',
+    prefix: 'airways' | 'waypoints' | 'vhf' | 'ndb' | 'holdings',
     entries: T,
 ) {
+    const mapStore = useMapStore();
     let groups: Record<string, Record<string, any>> = {};
     for (const [key, data] of Object.entries(entries)) {
         const identifier = prefix + '-' + (data as D)[0] as string;
@@ -213,11 +237,67 @@ async function upsertBagsByIdentifier<D extends any[], T extends Record<string, 
     const groupsKeys = Object.keys(groups);
     const groupsValues = Object.values(groups);
 
-    await clientDB.navigraphDB.bulkPut(groupsValues, groupsKeys);
+    try {
+        let inserted = 0;
+        const total = groupsKeys.length;
+        const chunkSize = 1000;
+        const initialProgress = mapStore.navigraphUpdateProgress;
+
+        for (let i = 0; i < total; i += chunkSize) {
+            const valuesChunk = groupsValues.slice(i, i + chunkSize);
+            const keysChunk = groupsKeys.slice(i, i + chunkSize);
+            await clientDB.navigraphDB.bulkPut(valuesChunk, keysChunk);
+            inserted += valuesChunk.length;
+
+            mapStore.navigraphUpdateProgress = initialProgress + ((inserted / total) * 18);
+
+            await new Promise(resolve => requestAnimationFrame(resolve));
+        }
+    }
+    catch (e) {
+        await clientDB.delete();
+        throw e;
+    }
 
     groupsKeys.length = 0;
     groupsValues.length = 0;
     (groups as any) = null;
+}
+
+async function updateNavigraph() {
+    try {
+        const store = useStore();
+        const mapStore = useMapStore();
+        const dataStore = useDataStore();
+
+        mapStore.isNavigraphUpdating = true;
+
+        const type = store.user?.hasFms ? 'current' : 'outdated';
+        const fetchedData = await $fetch<NavigraphNavDataShort>(`/api/data/navigraph/data${ store.user?.hasFms ? '' : '/outdated' }?airac=${ dataStore.versions.value?.navigraph?.[type] }&version=${ store.version }`);
+        mapStore.navigraphUpdateProgress = 10;
+
+        await clientDB.navigraphData.clear();
+        await clientDB.navigraphAirports.clear();
+        await clientDB.navigraphDB.clear();
+        dataStore.navigraph.version.value = null;
+
+        await upsertBagsByIdentifier('airways', fetchedData.airways);
+        await upsertBagsByIdentifier('waypoints', fetchedData.waypoints);
+        await upsertBagsByIdentifier('vhf', fetchedData.vhf);
+        await upsertBagsByIdentifier('ndb', fetchedData.ndb);
+        await upsertBagsByIdentifier('holdings', fetchedData.holdings);
+
+        for (const key in fetchedData) {
+            await clientDB.navigraphData.put(fetchedData[key as keyof typeof fetchedData] as any, key as any);
+        }
+
+        await clientDB.navigraphData.put('1', 'inserted');
+        dataStore.navigraph.version.value = dataStore.versions.value?.navigraph?.[type] ?? '';
+        mapStore.isNavigraphUpdating = false;
+    }
+    catch {
+        location.reload();
+    }
 }
 
 export function checkForNavigraph() {
@@ -226,7 +306,6 @@ export function checkForNavigraph() {
             const navigraph = await dataStore.navigraph.data('version');
 
             const type = store.user?.hasFms ? 'current' : 'outdated';
-            let notRequired = true;
 
             const emptyDB = await clientDB.navigraphData.get('inserted') !== '1';
 
@@ -235,29 +314,7 @@ export function checkForNavigraph() {
                 return 'notRequired';
             }
 
-            if (!navigraph || navigraph !== dataStore.versions.value?.navigraph?.[type] || emptyDB) {
-                const fetchedData = await $fetch<NavigraphNavDataShort>(`/api/data/navigraph/data${ store.user?.hasFms ? '' : '/outdated' }?airac=${ dataStore.versions.value?.navigraph?.[type] }&version=${ store.version }`);
-
-                await clientDB.navigraphData.clear();
-                await clientDB.navigraphAirports.clear();
-                await clientDB.navigraphDB.clear();
-
-                await upsertBagsByIdentifier('airways', fetchedData.airways);
-                await upsertBagsByIdentifier('waypoints', fetchedData.waypoints);
-                await upsertBagsByIdentifier('vhf', fetchedData.vhf);
-                await upsertBagsByIdentifier('ndb', fetchedData.ndb);
-
-                for (const key in fetchedData) {
-                    await clientDB.navigraphData.put(fetchedData[key as keyof typeof fetchedData] as any, key as any);
-                }
-
-                await clientDB.navigraphData.put('1', 'inserted');
-
-                notRequired = false;
-            }
-
-            dataStore.navigraph.version.value = dataStore.versions.value?.navigraph?.[type] ?? '';
-            if (notRequired) return 'notRequired';
+            updateNavigraph();
         }
         catch (e) {
             if (useIsDebug()) {
@@ -271,19 +328,25 @@ export function checkForNavigraph() {
 
 export function checkForAirlines() {
     return initCheck('airlines', async ({ dataStore }) => {
-        let airlines = await clientDB.data.get('airlines') as IDBAirlinesData | undefined;
+        const airlines = await clientDB.airlines.get('version') as string | undefined;
         let notRequired = true;
-        if (!airlines || !airlines.expireDate || Date.now() > airlines.expireDate) {
+        if (!airlines || Date.now() > new Date(airlines).getTime()) {
             const data = await $fetch<RadarDataAirlinesAllList>('/api/data/airlines?v=1');
-            airlines = {
-                expireDate: Date.now() + (1000 * 60 * 60 * 24 * 7),
-                airlines: data,
-            };
-            await clientDB.data.put(airlines, 'airlines');
+
+            try {
+                await clientDB.airlines.clear();
+                await clientDB.airlines.bulkPut(Object.values(data.all), Object.keys(data.all).map(x => x));
+                await clientDB.airlines.bulkPut(Object.values(data.virtual), Object.keys(data.virtual).map(x => `${ x }-virtual`));
+                await clientDB.airlines.put(new Date(Date.now() + (1000 * 60 * 60 * 24 * 7)).toISOString(), 'version');
+            }
+            catch {
+                clientDB.delete();
+                location.reload();
+            }
+
             notRequired = false;
         }
 
-        dataStore.airlines.value = airlines.airlines;
         if (notRequired) return 'notRequired';
     });
 }

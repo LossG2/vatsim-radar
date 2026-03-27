@@ -244,16 +244,18 @@ export const collapsingWithOverlay = (map: MaybeRef<Map | null>, pixel: Pixel, e
     return collapsingWithOverlay;
 };
 
-export function getAirlineFromCallsign(callsign: string, remarks?: string): RadarDataAirline | null {
+export async function getAirlineFromCallsign(callsign: string, remarks?: string): Promise<RadarDataAirline | null> {
     const icao = /^(?<callsign>[A-Z]+)[0-9]?/.exec(callsign)?.groups?.callsign as string ?? null;
     if (!icao) return null;
 
-    const airline = useDataStore().airlines.value.all[icao] as RadarDataAirline | undefined;
+    const airline = await useDataStore().airlines(icao);
 
     if (!airline && !remarks) return airline ?? null;
 
-    const vaCallsign = (remarks && useDataStore().airlines.value.virtual[icao]) ? getVACallsign(remarks) : null;
-    const website = (remarks && useDataStore().airlines.value.virtual[icao]) ? getVAWebsite(remarks) : null;
+    const virtualAirline = remarks ? await useDataStore().airlines(icao, true) : undefined;
+
+    const vaCallsign = (remarks && virtualAirline) ? getVACallsign(remarks) : null;
+    const website = (remarks && virtualAirline) ? getVAWebsite(remarks) : null;
 
     if (!vaCallsign && !airline) return null;
 
@@ -290,7 +292,9 @@ export const customDefu = createDefu((obj, key, value) => {
 
     if (customDefuMergeAsIs && typeof value === 'object') {
         Object.assign(obj[key], value);
-        customDefuMergeAsIs = false;
+        setTimeout(() => {
+            customDefuMergeAsIs = false;
+        }, 0);
         return true;
     }
 });
